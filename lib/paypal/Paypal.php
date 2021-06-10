@@ -2044,7 +2044,7 @@ class Paypal
      * @param array $data
      * @return array []
      */
-    public function modeMerge(array $mode, array $data)
+    protected function modeMerge(array $mode, array $data)
     {
         $merge = [];
         foreach ($mode as $k => $v) {
@@ -2134,7 +2134,7 @@ class Paypal
      * @throws PaypalException 返回PAYPAL错误号，错误信息为PP返回的JSON字串
      * @return array 返回值，如果出错，会抛异常
      */
-    private function nvpRequest($method, array $fields)
+    protected function nvpRequest($method, array $fields)
     {
         $datas = array(
             'METHOD'    => $method,
@@ -2234,7 +2234,7 @@ class Paypal
      * @param string $separator
      * @return void
      */
-    public function getCamelizeName($uncamelized_words, $separator = '_')
+    protected function getCamelizeName($uncamelized_words, $separator = '_')
     {
         $uncamelized_words = $separator . str_replace($separator, " ", strtolower($uncamelized_words));
         return ltrim(str_replace(" ", "", ucwords($uncamelized_words)), $separator);
