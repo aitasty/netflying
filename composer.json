@@ -1,0 +1,25 @@
+{
+    "name": "netflying/php-sdk",
+    "description": "netflying",
+    "keywords": ["php-sdk","netflying-sdk"],
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "netflying",
+            "homepage": "https://github.com/aitasty/netflying"
+        }
+    ],
+    "minimum-stability": "dev",
+    "require": {
+        "php": ">=7.1.0",
+        "braintree/braintree_php": "*",
+        "paypal/rest-api-sdk-php": "*",
+        "paypal/paypal-checkout-sdk": "*",
+    },
+    "autoload":{
+        "psr-4":{
+            "Netflying\\":"lib/",
+            "NetflyingTest\\":"test/"
+        }
+    }
+}
