@@ -14,7 +14,7 @@
         "php": ">=7.1.0",
         "braintree/braintree_php": "*",
         "paypal/rest-api-sdk-php": "*",
-        "paypal/paypal-checkout-sdk": "*",
+        "paypal/paypal-checkout-sdk": "*"
     },
     "autoload":{
         "psr-4":{
