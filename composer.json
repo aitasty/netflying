@@ -1,5 +1,5 @@
 {
-    "name": "netflying/php-sdk",
+    "name": "aitasty/netflying",
     "description": "netflying",
     "keywords": ["php-sdk","netflying-sdk"],
     "license": "MIT",
@@ -11,9 +11,9 @@
     ],
     "require": {
         "php": ">=7.1.0",
-        "braintree/braintree_php": "^6.2.0",
-        "paypal/rest-api-sdk-php": "^1.0.1",
-        "paypal/paypal-checkout-sdk": "^1.0.1"
+        "braintree/braintree_php": "^6.2",
+        "paypal/rest-api-sdk-php": "^1.14",
+        "paypal/paypal-checkout-sdk": "^1.0"
     },
     "require-dev": {
     },
