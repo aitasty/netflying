@@ -15,6 +15,8 @@
         "paypal/rest-api-sdk-php": "^1.0.1",
         "paypal/paypal-checkout-sdk": "^1.0.1"
     },
+    "require-dev": {
+    },
     "autoload":{
         "psr-4":{
             "Netflying\\":"lib/",
