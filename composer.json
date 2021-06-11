@@ -12,9 +12,9 @@
     "minimum-stability": "dev",
     "require": {
         "php": ">=7.1.0",
-        "braintree/braintree_php": "*",
-        "paypal/rest-api-sdk-php": "*",
-        "paypal/paypal-checkout-sdk": "*"
+        "braintree/braintree_php": "^6.2.0",
+        "paypal/rest-api-sdk-php": "^1.0.1",
+        "paypal/paypal-checkout-sdk": "^1.0.1"
     },
     "autoload":{
         "psr-4":{
