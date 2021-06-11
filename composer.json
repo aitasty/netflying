@@ -9,7 +9,6 @@
             "homepage": "https://github.com/aitasty/netflying"
         }
     ],
-    "minimum-stability": "v1.1",
     "require": {
         "php": ">=7.1.0",
         "braintree/braintree_php": "^6.2.0",
