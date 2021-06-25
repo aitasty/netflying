@@ -129,7 +129,7 @@ use PayPal\Exception\PayPalConnectionException;
  *      4. 授权添加paypal支付方式(授权之后会非调起静默支付)
  *          4.1  js->approve回调获取payload => $Paypal->boundCustomer([...(必要token已自动封装),customer=>payload['details']]);
  */
-class Paypal
+abstract class Paypal
 {
     //init config
     protected $config = [
@@ -214,6 +214,11 @@ class Paypal
         foreach (['notify_url', 'return_url', 'cancel_url'] as $v) {
             $this->config[$v] = $this->domainUrl($this->config[$v]);
         }
+    }
+
+    public function purchase()
+    {
+
     }
 
     /**

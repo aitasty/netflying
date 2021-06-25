@@ -1,10 +1,13 @@
 <?php
 
-namespace Netflying\Airwallex;
+namespace Netflying\Pay\Airwallex;
 
 use Exception;
+use Netflying\Pay\PayAbstract;
+use Netflying\Common\Utils;
+use Netflying\Common\Curl;
 
-class Awx
+class Awx extends PayAbstract
 {
     //必要初始化配置
     protected $config = [
@@ -30,8 +33,9 @@ class Awx
         //可选,是否需要订单前缀,[订单前缀是用来区分不同来源,如多站的情况]
         'order_prefix' => '',
         //支持卡类型
-        'card_type' => [1, 3], //默认只支持visa,master 对照self::checkCardType()
+        'card_type' => [],
     ];
+    protected $cardType = [1, 3]; //默认只支持visa,master 对照self::checkCardType()
     protected $excludeConfKey = ['order_prefix', 'card_type'];
     protected $descriptor = "awx"; //显现在用户帐单描述
     //会话token
@@ -39,10 +43,7 @@ class Awx
     protected $token = "";
     //token 20分钟失效
     protected $tokenExpire = 1000;
-    //是否已初始化
-    protected $initialized = 1;
-    //错误信息
-    protected $error = [];
+
     /** 
      * 缓存Closure函数(文件缓存,redis缓存等),一定要设置,否则接口会每次都请求token
      * 标准化格式 function ($key,$value,$expire) { return cache($key,$value,$expire) }
@@ -52,26 +53,19 @@ class Awx
      */
     protected $cacheFunc = null;
 
-    public function __construct(array $config)
+    public function __construct(array $config, $descriptor = '', $cacheFunc = null)
     {
-        foreach ($this->config as $k => $v) {
-            $conf = isset($config[$k]) ? $config[$k] : $v;
-            if ($conf === false && !in_array($k, $this->excludeConfKey)) {
-                $this->initialized = 0;
-                $this->error("{$k} false");
-                break;
-            }
-            $this->config[$k] = $conf;
+        $this->config($config);
+        if (!empty($this->config['cart_type'])) {
+            $this->cardType = $this->config['cart_type'];
         }
-        if (!empty($config['descriptor'])) {
-            $this->descriptor = $config['descriptor'];
+        if (!empty($descriptor)) {
+            $this->descriptor = $descriptor;
         }
-        if (isset($config['cacheFunc'])) {
-            $this->cacheFunc = $config['cacheFunc'];
+        if (!empty($cacheFunc)) {
+            $this->cacheFunc = $cacheFunc;
         }
-        if ($this->initialized == 1) {
-            $this->getToken();
-        }
+        $this->getToken();
     }
     public function descriptor($msg = '')
     {
@@ -79,20 +73,6 @@ class Awx
             $this->descriptor = $msg;
         }
         return $this->descriptor;
-    }
-    /**
-     * 接口调用期间错误信息
-     *
-     * @param string $msg 错误信息 
-     * @param integer $code 错误码(不同的接口错误码自定义)
-     * @return array 
-     */
-    public function error($msg = '', $code = 0)
-    {
-        if (!empty($msg)) {
-            $this->error = ['msg' => $msg, 'code' => $code];
-        }
-        return $this->error;
     }
     /**
      * 用户端设备指纹标识
@@ -115,8 +95,7 @@ class Awx
 
     /**
      * 判断卡类型
-     *
-     * @param [type] $cardNumber
+     * @param string $cardNumber
      * @return void
      */
     public function checkCardType($cardNumber, $verify = true)
@@ -144,7 +123,7 @@ class Awx
             }
         }
         if (!empty($cardId) && $verify) {
-            if (in_array($cardId, $this->config['card_type'])) {
+            if (in_array($cardId, $this->cardType)) {
                 return true;
             } else {
                 return false;
@@ -160,19 +139,25 @@ class Awx
      * @param [string] $device_id  来自deviceToken的device_id
      * @return void
      */
-    public function createPayment(array $order, array $credit, $device_id)
+    public function purchase($data)
     {
+        $data = Utils::modeData([
+            'order' => [],
+            'credit'  => [],
+            'device_id' => ''
+        ], $data);
+        $order = $data['order'];
+        $credit = $data['credit'];
+        $device_id = $data['device_id'];
         try {
             $orderData = $this->orderData($order);
             $creditData = $this->orderCredit($credit);
         } catch (Exception $e) {
             $this->error($e->getMessage());
             return [];
-            //throw new Exception($e->getMessage());
         }
         $createPayUrl = $this->config['airWallexDomain'] . $this->config['createPayUrl'];
         $createResponse = $this->request($createPayUrl, is_array($orderData) ? json_encode($orderData) : []);
-        $createResponse = json_decode($createResponse, TRUE);
         if (!empty($createResponse['id']) && $createResponse['status'] == 'REQUIRES_PAYMENT_METHOD') {
             return $this->confirmPayment($createResponse, $creditData, $orderData['merchant_order_id'], $device_id);
         } else {
@@ -224,7 +209,7 @@ class Awx
                 $error = $this->error();
             }
         }
-        if ($type=='confirmContinue3ds') {
+        if ($type == 'confirmContinue3ds') {
             $status = -1;
         }
         //payment end
@@ -270,11 +255,15 @@ class Awx
      */
     public function notify()
     {
-        $json = file_get_contents('php://input');
+        $data = Utils::request($rawData);
+        $json = $rawData['input'];
         //验证有效信息
-        $header = $_SERVER;
-        $timestamp = isset($header['HTTP_X_TIMESTAMP']) ? $header['HTTP_X_TIMESTAMP'] : time();
-        $signature = isset($header['HTTP_X_SIGNATURE']) ? $header['HTTP_X_SIGNATURE'] : '';
+        $header = Utils::modeData([
+            'HTTP_X_TIMESTAMP' => time(),
+            'HTTP_X_SIGNATURE' => '',
+        ], $_SERVER);
+        $timestamp = $header['HTTP_X_TIMESTAMP'];
+        $signature = $header['HTTP_X_SIGNATURE'];
         if (empty($signature)) {
             $this->error('signature error', 1);
             return false;
@@ -283,9 +272,8 @@ class Awx
             $this->error('failed to verify the signature', 2);
             return false;
         }
-        $data = json_decode($json, true);
         if (empty($data) || !is_array($data)) {
-            $this->error('data error', 3);
+            $this->error('notify data error', 3);
             return false;
         }
         $name = $data['name'];
@@ -423,14 +411,14 @@ class Awx
         }
         $confirmUrl = $this->config['airWallexDomain'] . '/api/v1/pa/payment_intents/' . $data['paymentIntentId'] . '/confirm_continue';
         $post = [
-            'request_id' => $this->dayOrderSn($this->config['order_prefix']) . mt_rand(100, 999),
+            'request_id' => Utils::dayOrderSn($this->config['order_prefix']) . mt_rand(100, 999),
             'type' => '3dsCheckEnrollment', // 3ds_check_enrollment 官方样例使用该参数类型
             'three_ds' => [
                 'device_data_collection_res' => $data['response']
             ],
         ];
-        $return_url = $this->domain() . $this->config['return_url'];
-        $return_url = $this->buildUri($return_url, ['status' => 'success', 'type' => 'confirmContinue', 'paymentIntentId' => $data['paymentIntentId']]);
+        $return_url = Utils::domain() . $this->config['return_url'];
+        $return_url = Utils::buildUri($return_url, ['status' => 'success', 'type' => 'confirmContinue', 'paymentIntentId' => $data['paymentIntentId']]);
         return $this->requestApi($confirmUrl, $post, [
             'type' => 'confirmContinue',
             'orderId' => $data['orderId'],
@@ -466,7 +454,7 @@ class Awx
         }
         $confirmUrl = $this->config['airWallexDomain'] . '/api/v1/pa/payment_intents/' . $data['paymentIntentId'] . '/confirm_continue';
         $post = [
-            'request_id' => $this->dayOrderSn($this->config['order_prefix']) . mt_rand(100, 999),
+            'request_id' => Utils::dayOrderSn($this->config['order_prefix']) . mt_rand(100, 999),
             'type' => '3dsValidate',
             'three_ds' => [
                 'ds_transaction_id' => $data['transactionId']
@@ -494,7 +482,7 @@ class Awx
     {
         $paymentIntentId = $createResponse['id'];
         $confirmUrl = $this->config['airWallexDomain'] . '/api/v1/pa/payment_intents/' . $paymentIntentId . '/confirm';
-        $requestId = $this->dayOrderSn($this->config['order_prefix']) . mt_rand(100, 999);
+        $requestId = Utils::dayOrderSn($this->config['order_prefix']) . mt_rand(100, 999);
         $billing = $createResponse['order']['shipping'];
         $payment_method = [
             'type' => 'card',
@@ -512,9 +500,9 @@ class Awx
         //return_url: The URL to redirect your customer back to after they authenticate or cancel their payment on the PaymentMethod’s app or site;
         // If you’d prefer to redirect to a mobile application, you can alternatively supply an application URI scheme.
         // the return_url that is required to provide the response upon the completion of the flow.
-        $return_url = $this->domain() . $this->config['return_url'];
+        $return_url = Utils::domain() . $this->config['return_url'];
         //default: 3ds
-        $return_url = $this->buildUri($return_url, ['3ds' => 1, 'paymentIntentId' => $paymentIntentId, 'orderId' => $orderId]);
+        $return_url = Utils::buildUri($return_url, ['3ds' => 1, 'paymentIntentId' => $paymentIntentId, 'orderId' => $orderId]);
         $post = [
             'request_id' => $requestId,
             'payment_method' => $payment_method,
@@ -548,15 +536,14 @@ class Awx
     protected function requestApi($url, $post, $param = [])
     {
         $response = $this->request($url, json_encode($post, JSON_UNESCAPED_UNICODE));
-        $response = json_decode($response, TRUE);
         $status = isset($response['status']) ? $response['status'] : ''; //todo: if empty status
         $orderId = !empty($param['orderId']) ? $param['orderId'] : ''; //订单编号
         $returnUrl = !empty($param['return_url']) ? $param['return_url'] : '';
         $type = isset($param['type']) ? $param['type'] : '';
         if (empty($returnUrl)) {
-            $returnUrl = $this->domain() . $this->config['return_url'];
+            $returnUrl = Utils::domain() . $this->config['return_url'];
         }
-        $returnUrl = $this->buildUri($returnUrl, ['orderId' => $orderId]);
+        $returnUrl = Utils::buildUri($returnUrl, ['orderId' => $orderId]);
         //exception
         $code = isset($response['code']) ? $response['code'] : '';
         $message = isset($response['message']) ? $response['message'] : '';
@@ -566,7 +553,7 @@ class Awx
         //有可能已经是成功状态,重复操作了.
         $status = strpos($message, 'SUCCEEDED') !== false ? 'SUCCEEDED' : $status;
         if ($status == 'SUCCEEDED') {
-            $returnUrl = $this->buildUri($returnUrl, ['status' => 1, 'msg' => base64_encode('succeeded')]); //成功
+            $returnUrl = Utils::buildUri($returnUrl, ['status' => 1, 'msg' => base64_encode('succeeded')]); //成功
             $ret = [
                 'type' => 'redirect',
                 'method' => 'get',  //直接成功跳转到return_url
@@ -575,7 +562,7 @@ class Awx
             ];
             return $ret;
         } elseif ($status == 'CANCELLED') { //The PaymentIntent has been cancelled. Uncaptured funds will be returned.
-            $returnUrl = $this->buildUri($returnUrl, ['status' => -1, 'msg' => base64_encode('cancelled')]); //被取消
+            $returnUrl = Utils::buildUri($returnUrl, ['status' => -1, 'msg' => base64_encode('cancelled')]); //被取消
             $ret = [
                 'type' => 'redirect',
                 'method' => 'get',  //直接成功跳转到return_url
@@ -630,9 +617,9 @@ class Awx
             //   and a different payment_method should be provide
             // $status == 'REQUIRES_CAPTURE'            
             //See next_action for the details. For example next_action=capture indicates that capture is outstanding.
-            $this->error('[' . $status . ']' . $message);
+            $this->error(['status' => $status, 'message' => $message]);
         }
-        $returnUrl = $this->buildUri($returnUrl, ['status' => 0, 'msg' => base64_encode('[' . $status . ']' . $message), 'type' => $type]); //未支付,或异常失败
+        $returnUrl = Utils::buildUri($returnUrl, ['status' => 0, 'msg' => base64_encode('[' . $status . ']' . $message), 'type' => $type]); //未支付,或异常失败
         $ret = [
             'type' => 'redirect',
             'method' => 'get',  //直接成功跳转到return_url
@@ -666,7 +653,6 @@ class Awx
     protected function setToken()
     {
         $result = $this->request($this->config['tokenUrl']);
-        $result = !empty($result) ? json_decode($result, true) : [];
         $token  = isset($result['token']) ? $result['token'] : '';
         if (is_callable($this->cacheFunc)) {
             call_user_func_array($this->cacheFunc, [$this->tokenKey, $token, $this->tokenExpire]);
@@ -722,10 +708,10 @@ class Awx
             }
             //自动加前缀
             $pre = $this->config['order_prefix'];
-            $orderId = !empty($data['order_id']) ? $pre . trim($data['order_id'], $pre) : $this->dayOrderSn($pre);
+            $orderId = !empty($data['order_id']) ? $pre . trim($data['order_id'], $pre) : Utils::dayOrderSn($pre);
             $order = [
                 'merchant_order_id' => $orderId, //The order ID created in merchant's order system that corresponds to this PaymentIntent
-                'request_id' => $this->dayOrderSn($this->config['order_prefix']) . mt_rand(100, 999), //Unique request ID specified by the merchant
+                'request_id' => Utils::dayOrderSn($this->config['order_prefix']) . mt_rand(100, 999), //Unique request ID specified by the merchant
                 'amount' => $data['amount'],    //Payment amount. This is the order amount you would like to charge your customer.
                 'currency' => $data['currency'], //Payment currency
                 'descriptor' => $this->descriptor, //Descriptor that will display to the customer. For example, in customer's credit card statement
@@ -777,228 +763,32 @@ class Awx
     /**
      * 统一接口交互[自动带入所需的头信息与token]
      *
-     * @param [type] $url
+     * @param string $url
      * @param array  $data
      * @param boolean $isFollow
-     * @return void
+     * @return array
      */
     protected function request($url, $data = [], $isFollow = false)
     {
-
-        if (empty($this->initialized)) {
-            return false;
-        }
-        $curl = curl_init($url);
-        curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, 30);
-        curl_setopt($curl, CURLOPT_TIMEOUT, 30);
-        curl_setopt($curl, CURLOPT_RETURNTRANSFER, TRUE);
-        curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($curl, CURLOPT_POST, 1);
-        curl_setopt($curl, CURLOPT_POSTFIELDS, $data);
-        if ($isFollow == true) {
-            curl_setopt($curl, CURLOPT_FOLLOWLOCATION, true);
-        }
         if (empty($this->token)) {
-            curl_setopt(
-                $curl,
-                CURLOPT_HTTPHEADER,
-                array(
-                    'Content-Type: application/json; charset=utf-8',
-                    'x-api-key: ' . $this->config['apiKey'],
-                    'x-client-id: ' . $this->config['clientId'],
-                )
-            );
+            $header = [
+                'Content-Type'  => 'application/json; charset=utf-8',
+                'x-api-key'     => $this->config['apiKey'],
+                'x-client-id'   => $this->config['clientId'],
+            ];
         } else {
-            curl_setopt(
-                $curl,
-                CURLOPT_HTTPHEADER,
-                array(
-                    'Content-Type: application/json',
-                    'region: string',
-                    'Authorization: Bearer ' . $this->token
-                )
-            );
+            $header = [
+                'Content-Type'  => 'application/json; charset=utf-8',
+                'region'        => 'string',
+                'Authorization' => 'Bearer ' . $this->token,
+            ];
         }
-        $result = curl_exec($curl);
-        if ($result === false) {
-            $this->error(curl_error($curl), 1);
+        $Curl   = new Curl;
+        $result = $Curl->follow(true)->httpheader($header)->returntransfer(true)->verify(false, false)->verbose(0)->conntimeout(30)->timeout(30)->post($url, $data);
+        $error  = $Curl->curlError();
+        if (!empty($error)) {
+            $this->error($error, 1);
         }
-        curl_close($curl);
-        return $result;
-    }
-
-    public function isSsl()
-    {
-        $server = $_SERVER;
-        if (isset($server['HTTPS']) && ('1' == $server['HTTPS'] || 'on' == strtolower($server['HTTPS']))) {
-            return true;
-        } elseif (isset($server['REQUEST_SCHEME']) && 'https' == $server['REQUEST_SCHEME']) {
-            return true;
-        } elseif (isset($server['SERVER_PORT']) && ('443' == $server['SERVER_PORT'])) {
-            return true;
-        } elseif (isset($server['HTTP_X_FORWARDED_PROTO']) && 'https' == $server['HTTP_X_FORWARDED_PROTO']) {
-            return true;
-        }
-        return false;
-    }
-    /**
-     * 当前URL地址中的scheme参数
-     * @access public
-     * @return string
-     */
-    public function scheme()
-    {
-        return $this->isSsl() ? 'https' : 'http';
-    }
-    public function domain()
-    {
-        return $this->scheme() . '://' . $this->host();
-    }
-    /**
-     * 当前请求的host
-     * @access public
-     * @param bool $strict true 仅仅获取HOST
-     * @return string
-     */
-    public function host($strict = false)
-    {
-        if (isset($_SERVER['HTTP_X_REAL_HOST'])) {
-            $host = $_SERVER['HTTP_X_REAL_HOST'];
-        } else {
-            $host = $_SERVER['HTTP_HOST'];
-        }
-        return true === $strict && strpos($host, ':') ? strstr($host, ':', true) : $host;
-    }
-    public function buildUri($url, $data = [])
-    {
-        if (empty($data)) {
-            return $url;
-        }
-        $arr  = parse_url($url);
-        if (empty($arr)) {
-            return $url;
-        }
-        $query    = isset($arr['query']) ? $arr['query'] : '';
-        $queryArr = !empty($query) ? $this->parseQuery($query) : [];
-        $queryArr = array_merge($queryArr, $data);
-        $query = $this->buildQuery($queryArr);
-        $scheme = isset($arr['scheme']) ? $arr['scheme'] . '://' : '';
-        $host   = isset($arr['host']) ? $arr['host'] : '';
-        $path   = isset($arr['path']) ? $arr['path'] : '';
-        return $scheme . $host . $path . '?' . $query;
-    }
-
-    /**
-     * Build a query string from an array of key value pairs.
-     *
-     * This function can use the return value of parse_query() to build a query
-     * string. This function does not modify the provided keys when an array is
-     * encountered (like http_build_query would).
-     *
-     * @param array     $params   Query string parameters.
-     * @param int|false $encoding Set to false to not encode, PHP_QUERY_RFC3986
-     *                            to encode using RFC3986, or PHP_QUERY_RFC1738
-     *                            to encode using RFC1738.
-     * @return string
-     */
-    public function buildQuery(array $params, $encoding = PHP_QUERY_RFC3986)
-    {
-        if (!$params) {
-            return '';
-        }
-        if ($encoding === false) {
-            $encoder = function ($str) {
-                return $str;
-            };
-        } elseif ($encoding === PHP_QUERY_RFC3986) {
-            $encoder = 'rawurlencode';
-        } elseif ($encoding === PHP_QUERY_RFC1738) {
-            $encoder = 'urlencode';
-        } else {
-            throw new \Exception('Invalid type');
-        }
-        $qs = '';
-        foreach ($params as $k => $v) {
-            $k = $encoder($k);
-            if (!is_array($v)) {
-                $qs .= $k;
-                if ($v !== null) {
-                    $qs .= '=' . $encoder($v);
-                }
-                $qs .= '&';
-            } else {
-                foreach ($v as $vv) {
-                    $qs .= $k;
-                    if ($vv !== null) {
-                        $qs .= '=' . $encoder($vv);
-                    }
-                    $qs .= '&';
-                }
-            }
-        }
-        return $qs ? (string) substr($qs, 0, -1) : '';
-    }
-    /**
-     * Parse a query string into an associative array.
-     *
-     * If multiple values are found for the same key, the value of that key
-     * value pair will become an array. This function does not parse nested
-     * PHP style arrays into an associative array (e.g., foo[a]=1&foo[b]=2 will
-     * be parsed into ['foo[a]' => '1', 'foo[b]' => '2']).
-     *
-     * @param string   $str         Query string to parse
-     * @param int|bool $urlEncoding How the query string is encoded
-     *
-     * @return array
-     */
-    public function parseQuery($str, $urlEncoding = true)
-    {
-        $result = [];
-        if ($str === '') {
-            return $result;
-        }
-        if ($urlEncoding === true) {
-            $decoder = function ($value) {
-                return rawurldecode(str_replace('+', ' ', $value));
-            };
-        } elseif ($urlEncoding === PHP_QUERY_RFC3986) {
-            $decoder = 'rawurldecode';
-        } elseif ($urlEncoding === PHP_QUERY_RFC1738) {
-            $decoder = 'urldecode';
-        } else {
-            $decoder = function ($str) {
-                return $str;
-            };
-        }
-        foreach (explode('&', $str) as $kvp) {
-            $parts = explode('=', $kvp, 2);
-            $key = $decoder($parts[0]);
-            $value = isset($parts[1]) ? $decoder($parts[1]) : null;
-            if (!isset($result[$key])) {
-                $result[$key] = $value;
-            } else {
-                if (!is_array($result[$key])) {
-                    $result[$key] = [$result[$key]];
-                }
-                $result[$key][] = $value;
-            }
-        }
-        return $result;
-    }
-    /**
-     * 生成唯一的订单编号
-     *
-     * @param string $prefix
-     * @return void
-     */
-    public function dayOrderSn($prefix = '')
-    {
-        date_default_timezone_set("PRC");
-        list($usec, $sec) = explode(" ", microtime());
-        $dayTime = date('ymdHis', $sec);
-        $usec = (float)$usec * 1000000;
-        $usec = str_pad($usec, 6, '0');
-        $sn = $prefix . $dayTime . $usec;
-        return $sn;
+        return Utils::jsonArray($result);
     }
 }
