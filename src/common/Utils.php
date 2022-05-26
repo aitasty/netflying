@@ -2,6 +2,8 @@
 
 namespace Netflying\Payment\common;
 
+use Closure;
+
 class Utils
 {
 
@@ -172,6 +174,56 @@ class Utils
         }
         $sn = $prefix . $time . $ipint. $usec;
         return $sn;
+    }
+    /**
+     * 获取session值以及客户端cookie的PHPSESSID
+     * @param $key 获取session索引值
+     * @param $value 设置session索引值
+     * @param $getSet 当从未设置过索引值时,设置值。
+     * @return string 默认返回session_id值
+     */
+    public static function cookieSession($key = '', $value = false, $getSet = false, \Closure $fn = function(){})
+    {
+        $sessName = session_name();
+        $cookieSessId = isset($_COOKIE[$sessName]) ? $_COOKIE[$sessName] : '';
+        $isSession = false;
+        if (PHP_SESSION_ACTIVE != session_status()) {
+            session_start();
+            $isSession = true;
+        }
+        $sessionId = session_id();
+        if (!empty($cookieSessId) && $cookieSessId != $sessionId) {
+            $fn([
+                'cookie' => $_COOKIE,
+                'session' => $_SESSION,
+                'session_id' => $sessionId
+            ]);
+        }
+        $rs = ['id' => $sessionId];
+        if (!empty($key)) {
+            $sessValue = isset($_SESSION[$key]) ? $_SESSION[$key] : false;
+            if ($value !== false) {
+                $_SESSION[$key] = $value;
+                $rs[$key] = $value;
+            } else if ($getSet !== false) {
+                if ($sessValue === false) {
+                    $_SESSION[$key] = $getSet;
+                    $rs[$key] = $getSet;
+                } else {
+                    $rs[$key] = $sessValue;
+                }
+            } else {
+                $rs[$key] = $sessValue;
+            }
+        }
+        if ($isSession) {
+            session_write_close();
+        }
+        if (empty($key)) {
+            return $sessionId;
+        } else {
+            return $rs[$key];
+        }
     }
     /**
      * 获取客户端IP地址

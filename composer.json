@@ -21,7 +21,7 @@
     },
     "autoload-dev":{
         "psr-4":{
-            "Netflying\\Payment\\Test":"test/"
+            "Netflying\\PaymentTest\\":"test/"
         }
     }
 }

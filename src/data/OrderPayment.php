@@ -39,7 +39,7 @@ class OrderPayment extends Model
         //状态时间
         'pay_time' => 'int',
     ];
-    protected $defaults = [
+    protected $fieldsNull = [
         'sn' => null,
         'type' => null,
         'merchant' => null,

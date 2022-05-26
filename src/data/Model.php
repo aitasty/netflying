@@ -8,7 +8,7 @@
 
 declare(strict_types=1);
 
-namespace Netflying\Payment\data;
+namespace Netflying\payment\data;
 
 use Exception;
 
@@ -46,7 +46,7 @@ class Model implements \JsonSerializable, \ArrayAccess, \IteratorAggregate, \Cou
         'object'
     ];
     //$fields字段值为null是否可忽略, 0忽略;1,不允许忽略必填有值(除了null以外的值)
-    protected $fieldsNull = 1;
+    protected $nullRequire = 1;
     /**
      * 定义公开成员字段模型
      * 结构示例
@@ -56,7 +56,7 @@ class Model implements \JsonSerializable, \ArrayAccess, \IteratorAggregate, \Cou
     // Data Structure details 公开成员字段数据
     protected $_propMap = [];
     // fields default value 成员字段默认值,不能为null，默认设为null，说明调用者需要必填值覆盖
-    protected $defaults = [];
+    protected $fieldsNull = [];
     //模型字段不满足要求(异常)提示
     protected $_propInit = [];
     //Array of attributes to setter functions
@@ -154,7 +154,7 @@ class Model implements \JsonSerializable, \ArrayAccess, \IteratorAggregate, \Cou
                 return $this;
             }
         }
-        $mode = $this->setterMode($this->fields, $data, $this->defaults);
+        $mode = $this->setterMode($this->fields, $data, $this->fieldsNull);
         $this->_propMap = $mode;
         return $this;
     }
@@ -168,21 +168,24 @@ class Model implements \JsonSerializable, \ArrayAccess, \IteratorAggregate, \Cou
      */
     protected function setterMode(array $mode, array $data = [], array $defaults = [])
     {
+        $mode = (array)$mode;
         $output = [];
         foreach ($mode as $k => $type) {
             if (!in_array($type, $this->_propType)) {
                 continue;
             }
+            $val = isset($data[$k]) ? $data[$k] : (isset($defaults[$k]) ? $defaults[$k] : null);
             if (in_array($type, ['array', 'object'])) {
-                $method = 'get' . self::convertToCamelCase($k);
-                $val = $this->$method();
-            } else {
-                $val = isset($data[$k]) ? $data[$k] : (isset($defaults[$k]) ? $defaults[$k] : null);
+                $ivar = lcfirst(self::convertToCamelCase($k));
+                $ivarNull = $ivar . 'Null';
+                $classIvar = $this->$ivar;
+                $classIvarNull = isset($this->$ivarNull) ? $this->$ivarNull : [];
+                $val = $this->setterMode(empty($classIvar) ? [] : $classIvar, $val, $classIvarNull);
             }
             if (is_null($val)) {
-                if ($this->fieldsNull!=0) {
+                if ($this->nullRequire != 0) {
                     $class = get_class($this);
-                    throw new \Exception("{$class} fields can't be null:" . $k);
+                    throw new \Exception("{$class} fields can't be null: " . $k);
                 }
                 continue;
             }
@@ -190,10 +193,25 @@ class Model implements \JsonSerializable, \ArrayAccess, \IteratorAggregate, \Cou
         }
         return $output;
     }
+    /**
+     * 设置模型字段值
+     *
+     * @param [string] $key 模型字段key
+     * @param [string|array|object|int] $value 如果为array|object需要取同名模型方法递归处理
+     * @return this
+     */
     protected function setter($key, $value)
     {
         if (isset($this->fields[$key])) {
-            $this->_propMap[$key] = $value;
+            if (is_array($value) || is_object($value)) {
+                $ivar = self::convertToCamelCase($key);
+                $ivarNull = $ivar . 'Null';
+                $classIvar = $this->$ivar;
+                $classIvarNull = isset($this->$ivarNull) ? $this->isvarNull : [];
+                $this->_propMap[$key] = $this->setterMode($classIvar, $value, $classIvarNull);
+            } else {
+                $this->_propMap[$key] = $value;
+            }
         }
         return $this;
     }

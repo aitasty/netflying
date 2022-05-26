@@ -22,20 +22,22 @@ class Merchant extends Model
         'return_url' => 'string',
         //通知地址
         'notify_url' => 'string',
-        //api信息
+        //api帐号信息
         'api_account' => 'array',
+        //api接口信息
+        'api_data' => 'array',
     ];
-    protected $defaults = [
+    protected $fieldsNull = [
         'is_test' => null,
         'merchant' => null,
         'return_url' => null,
         'notify_url' => null,
-        'api_account' => [],,
+        'api_account' => [],
+        'api_data' => []
     ];
-    
-    public function setApiAccount(array $data)
-    {
-        return $this->setter('api_account', $data);
-    }
+
+    protected $apiAccount = [];
+
+    protected $apiData = [];
 
 }

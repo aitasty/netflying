@@ -22,7 +22,7 @@ class Redirect extends Model
         'data' => 'array',
         'exception' => 'array'
     ];
-    protected $defaults = [
+    protected $fieldsNull = [
         'status' => null,
         'url' => null,
         'type' => null,
@@ -31,17 +31,13 @@ class Redirect extends Model
     ];
 
     protected $exception = [
-        'code' => '', //异常码
-        'msg' => '', //异常信息
+        'code' => 'int', //异常码
+        'msg' => 'string', //异常信息
     ];
 
-    public function getException()
-    {
-        return $this->exception;
-    }
+    protected $exceptionNull = [
+        'code' => 0,
+        'msg' => ''
+    ];
 
-    public function setException(array $data)
-    {
-        return $this->setter('exception', $this->setterMode($this->exception, $data));
-    }
 }

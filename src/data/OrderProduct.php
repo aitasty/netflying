@@ -41,7 +41,7 @@ class OrderProduct extends Model
         //商品链接
         'product_url' => 'string',
     ];
-    protected $defaults = [
+    protected $fieldsNull = [
         'sn' => null,
         'name' => null,
         'reference_id' => null,

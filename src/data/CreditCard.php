@@ -23,7 +23,7 @@ class CreditCard extends Model
         'csv'            => 'string',
         'holder_name'    => 'string',
     ];
-    protected $defaults = [
+    protected $fieldsNull = [
         'card_number'    => null,
         'expiry_month'   => null,
         'expiry_year'    => null,

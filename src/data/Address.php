@@ -40,7 +40,7 @@ class Address extends Model
         'street_address'  => 'string',
         'street_address2' => 'string'
     ];
-    protected $defaults = [
+    protected $fieldsNull = [
         'first_name'      => null,
         'last_name'       => null,
         'email'           => null,

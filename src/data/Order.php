@@ -38,7 +38,7 @@ class Order extends Model
         //cookie session
         'session_id' => 'string',
     ];
-    protected $defaults = [
+    protected $fieldsNull = [
         'sn' => null,
         'currency' => null,
         'purchase_amount' => null,
