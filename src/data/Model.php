@@ -8,7 +8,7 @@
 
 declare(strict_types=1);
 
-namespace Netflying\data;
+namespace Netflying\Payment\data;
 
 use Exception;
 

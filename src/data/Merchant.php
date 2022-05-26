@@ -6,7 +6,7 @@
  * @Last Modified time: 2022-05-25 17:29:21
  */
 
-namespace Netflying\data;
+namespace Netflying\Payment\data;
 
 /**
  * 支付通道基础数据结构

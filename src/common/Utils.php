@@ -1,6 +1,6 @@
 <?php
 
-namespace Netflying\common;
+namespace Netflying\Payment\common;
 
 class Utils
 {

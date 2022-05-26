@@ -6,7 +6,7 @@
  * @Last Modified time: 2022-05-25 16:08:00
  */
 
-namespace Netflying\data;
+namespace Netflying\Payment\data;
 
 
 /**

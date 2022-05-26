@@ -1,6 +1,6 @@
 <?php
 
-namespace Netflying\common;
+namespace Netflying\Payment\common;
 
 /**
  *  CURL通用配置类【单线程&多线程】

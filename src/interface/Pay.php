@@ -1,12 +1,12 @@
 <?php
 
-namespace Netflying\interface;
+namespace Netflying\Payment\interface;
 
-use Netflying\data\Merchant;
-use Netflying\data\Order;
-use Netflying\data\OrderProduct;
-use Netflying\data\Redirect;
-use Netflying\data\OrderPayment;
+use Netflying\Payment\data\Merchant;
+use Netflying\Payment\data\Order;
+use Netflying\Payment\data\OrderProduct;
+use Netflying\Payment\data\Redirect;
+use Netflying\Payment\data\OrderPayment;
 
 interface Pay
 {

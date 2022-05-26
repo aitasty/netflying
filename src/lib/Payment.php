@@ -1,6 +1,6 @@
 <?php
 
-namespace Netflying\lib;
+namespace Netflying\Payment\lib;
 
 class Payment
 {

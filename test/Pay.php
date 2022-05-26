@@ -1,8 +1,7 @@
 <?php
-namespace NetflyingTest;
+namespace Netflying\Payment\Test;
 
-use Netflying;
-use Netflying\data\Merchant;
+use Netflying\Payment\data\Merchant;
 
 class Pay
 {
@@ -14,9 +13,7 @@ class Pay
             'return_url' => 'return url',
             'notify_url' => 'notify url',
         ]);
-        $arr = $Merchant->toJson();
-        var_dump($arr);die;
-        echo $Merchant;
+        return $Merchant;
     }
 
     
