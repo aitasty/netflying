@@ -1,5 +1,5 @@
 <?php
-namespace Netflying\Payment\Test;
+namespace Netflying\PaymentTest;
 
 use Netflying\Payment\data\Merchant;
 

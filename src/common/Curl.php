@@ -90,7 +90,7 @@ class Curl
 		} else {
 			$this->cookie();
 		}
-        // init config if not set curlopt
+		// init config if not set curlopt
 		if (!empty($url)) $this->url($url);
 		if (!isset($this->_options[CURLOPT_RETURNTRANSFER])) $this->returntransfer();
 		if (!isset($this->_options[CURLOPT_HTTPHEADER])) 	$this->httpheader();
@@ -190,7 +190,11 @@ class Curl
 		$headers 	= array_merge($headers, $options);
 		$headerArr 	= array();
 		foreach ($headers as $n => $v) {
-			$headerArr[] = $n . ': ' . trim($v);
+			if (is_numeric($n)) {
+				$headerArr[] = trim($v);
+			} else {
+				$headerArr[] = $n . ': ' . trim($v);
+			}
 		}
 		$this->_options[CURLOPT_HTTPHEADER] = $headerArr;
 		return  $this;
@@ -440,34 +444,46 @@ class Curl
 		$this->_data = $this->parseData($data, $encode);
 		return $this;
 	}
-	public function postData($data = [])
+	public function xmlParser($str)
+	{
+		if (!is_string($str)) {
+			return false;
+		}
+		$xml_parser = xml_parser_create();
+		if (!xml_parse($xml_parser, $str, true)) {
+			xml_parser_free($xml_parser);
+			return false;
+		} else {
+			return (json_decode(json_encode(simplexml_load_string($str)), true));
+		}
+	}
+	/**
+	 * @param mixed $data //数组或xml/json字符串
+	 * 如果是XML格式字符串, <//?//xml version="1.0" encoding="UTF-8" //?//> 标准头开头
+	 * @return this
+	 */
+	public function postData($data = null)
 	{
 		$this->resetpost();
 		$postData = !empty($data) ? $data : $this->_data;
-		if ($this->_postjson && !empty($postData)) {
-			if (is_array($postData)) {
-				$postData = json_encode($postData);
+		$postData = ($this->_postjson && is_array($postData)) ? json_encode($postData) : $postData;
+		if (is_array($postData)) {
+			$buildData = http_build_query($postData);
+			if (isset($postData[0])) {
+				$newData = [];
+				foreach ($postData as $key => $val) {
+					$arr = explode('=', $val);
+					if (!isset($arr[1]))
+						continue;
+					$newData[] = $arr[0] . '=' . urlencode($arr[1]);
+				}
+				$buildData = implode('&', $newData);
 			}
-			$options[CURLOPT_POST] 		 = true;
-			$options[CURLOPT_POSTFIELDS] = $postData;
-			$this->setOption($options);
-			return $this;
-		}
-
-		$buildData = http_build_query($postData);
-		if (isset($postData[0])) {
-			$newData = [];
-			foreach ($postData as $key => $val) {
-				$arr = explode('=', $val);
-				if (!isset($arr[1]))
-					continue;
-				$newData[] = $arr[0] . '=' . urlencode($arr[1]);
-			}
-			$buildData = implode('&', $newData);
+			$postData = $buildData;
 		}
 		if (!empty($postData)) {
 			$options[CURLOPT_POST] 		 = true;
-			$options[CURLOPT_POSTFIELDS] = $buildData;
+			$options[CURLOPT_POSTFIELDS] = $postData;
 			$this->setOption($options);
 		}
 		return $this;
@@ -526,27 +542,29 @@ class Curl
 		curl_setopt_array($this->_ch, $this->_options);
 		return $this;
 	}
-    /**
-     * 请求curl
-     *
-     * @param [string] $type [get,post]
-     * @param [string] $url
-     * @param array $params
-     * [
-     *  'headers' => ['key'=>'value','key1'=>'value1']
-     *  'data' => ['k'=>'v','k1'=>'v1',[]]
-     *  'host' => 'headers host domain or ip'
-     * ]
-     * @return void
-     */
+	/**
+	 * 请求curl
+	 *
+	 * @param [string] $type [get,post]
+	 * @param [string] $url
+	 * @param array $params
+	 * [
+	 *  'headers' => ['key'=>'value','key1'=>'value1']
+	 *  'data' => ['k'=>'v','k1'=>'v1',[]]
+	 *  'host' => 'headers host domain or ip'
+	 * ]
+	 * @return array
+	 */
 	public function request($type, $url, array $params = [])
 	{
 		$host = isset($params['host']) ? $params['host'] : '';
 		$data = isset($params['data']) ? $params['data'] : [];
 		$headers = isset($params['headers']) ? $params['headers'] : [];
+		$follow = isset($params['follow']) ? (bool)$params['follow'] : true;
 		if (!empty($headers)) {
 			$this->httpheader($headers);
 		}
+		$this->follow($follow);
 		$this->header(true);
 		$type = strtolower($type);
 		if ($type == 'get') {
@@ -556,6 +574,11 @@ class Curl
 		}
 		return $this->response();
 	}
+	/**
+	 * 响应数据结构体
+	 *
+	 * @return void
+	 */
 	public function response()
 	{
 		return [
@@ -580,11 +603,11 @@ class Curl
 		$this->_info        = curl_getinfo($this->_ch);
 		$this->_httpcode 	= curl_getinfo($this->_ch, CURLINFO_HTTP_CODE);
 		$result = $this->_response;
-		if (isset($this->_info['http_code']) && $this->_info['http_code'] == '200') {
-			if (!empty($this->_options[CURLOPT_HEADER])) {
-				$headsize 		= isset($this->_info['header_size']) ? $this->_info['header_size'] : 0;
-				$this->_header  = substr($this->_response, 0, $headsize);
-				$this->_body 	= substr($this->_response, $headsize);
+		if (!empty($this->_options[CURLOPT_HEADER])) {
+			$headsize 		= isset($this->_info['header_size']) ? $this->_info['header_size'] : 0;
+			$this->_header  = substr($this->_response, 0, $headsize);
+			$this->_body 	= substr($this->_response, $headsize);
+			if (isset($this->_info['http_code']) && $this->_info['http_code'] == '200') {
 				$result = $this->_body;
 			}
 		}

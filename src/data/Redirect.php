@@ -3,7 +3,7 @@
  * @Author: He.Bin 
  * @Date: 2022-05-24 11:05:25 
  * @Last Modified by: He.Bin
- * @Last Modified time: 2022-05-24 17:37:43
+ * @Last Modified time: 2022-06-02 16:01:59
  */
 
 namespace Netflying\Payment\data;
@@ -16,19 +16,22 @@ namespace Netflying\Payment\data;
 class Redirect extends Model
 {
     protected $fields = [
+        //1正常,0失败,-1异常
         'status' => 'int',
         'url' => 'string',
         'type' => 'string',
-        'data' => 'array',
+        'params' => 'array',
         'exception' => 'array'
     ];
     protected $fieldsNull = [
         'status' => null,
         'url' => null,
         'type' => null,
-        'data' => [],
+        'params' => [],
         'exception' => []
     ];
+
+    protected $params = [];
 
     protected $exception = [
         'code' => 'int', //异常码

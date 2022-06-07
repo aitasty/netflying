@@ -3,7 +3,7 @@
  * @Author: He.Bin 
  * @Date: 2022-05-24 11:05:25 
  * @Last Modified by: He.Bin
- * @Last Modified time: 2022-05-25 15:55:04
+ * @Last Modified time: 2022-05-31 18:08:30
  */
 
 namespace Netflying\Payment\data;
@@ -38,7 +38,7 @@ class Address extends Model
         'district'        => 'string',
         'postal_code'     => 'string',
         'street_address'  => 'string',
-        'street_address2' => 'string'
+        'street_address1' => 'string'
     ];
     protected $fieldsNull = [
         'first_name'      => null,
@@ -51,7 +51,7 @@ class Address extends Model
         'district'        => '',
         'postal_code'     => null,
         'street_address'  => null,
-        'street_address2' => ''
+        'street_address1' => ''
     ];
 
 

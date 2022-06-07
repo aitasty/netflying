@@ -2,7 +2,6 @@
 
 namespace Netflying\Payment\common;
 
-use Closure;
 
 class Utils
 {
@@ -13,6 +12,26 @@ class Utils
             return true;
         }
         return false;
+    }
+
+    public static function mapData(array $mode, array $data, array $alias = [])
+    {
+        $put = [];
+        foreach ($mode as $field => $val) {
+            if (is_array($val)) {
+                $put[$field] = self::mapData($val, (isset($data[$field]) ? $data[$field] : []), (isset($alias[$field]) ? $alias[$field] : []));
+            } else {
+                if (!empty($alias[$field])) {
+                    $aliasArr = is_array($alias[$field]) ? $alias[$field] : explode(',', $alias[$field]);
+                    foreach ($aliasArr as $f) {
+                        $put[$field] = isset($data[$f]) ? $data[$f] : $val;
+                    }
+                } else {
+                    $put[$field] = isset($data[$field]) ? $data[$field] : $val;
+                }
+            }
+        }
+        return $put;
     }
 
     /** 
@@ -99,62 +118,6 @@ class Utils
         return $value;
     }
 
-    /**
-     * 获取请求数据
-     * @param array &rawData 原始数据
-     * @return array
-     */
-    public static function request(&$rawData = [])
-    {
-        $get   = $_GET;
-        $post  = $_POST;
-        $data  = $_REQUEST;
-        $input = @file_get_contents('php://input');
-        $put   = [];
-        if (!empty($input)) {
-            try {
-                $put = @json_decode($input, true);
-                // if (false !== strpos(self::contentType(), 'application/json')) {
-                //     $put = (array) json_decode($input, true);
-                // } else {
-                //     @parse_str($input, $put);
-                // }
-            } catch (\Exception $e) {
-            }
-            if (empty($put)) {
-                try {
-                    @parse_str($input, $put);
-                } catch (\Exception $e) {
-                }
-            }
-        }
-        try {
-            $rawData['get']   = !empty($get) ? $get : [];
-            $rawData['post']  = !empty($post) ? $post : [];
-            $rawData['input'] = !empty($input) ? $input : '';
-        } catch (\Exception $e) {
-        }
-        return array_merge($data, $put);
-    }
-
-    /**
-     * 当前请求 HTTP_CONTENT_TYPE
-     * @access public
-     * @return string
-     */
-    public static function contentType()
-    {
-        $contentType = isset($_SERVER['HTTP_CONTENT_TYPE']) ? $_SERVER['HTTP_CONTENT_TYPE'] : '';
-        if ($contentType) {
-            if (strpos($contentType, ';')) {
-                list($type) = explode(';', $contentType);
-            } else {
-                $type = $contentType;
-            }
-            return trim($type);
-        }
-        return '';
-    }
     /** 
      * 生成唯一的订单编号
      * @param string $prefix
@@ -166,99 +129,16 @@ class Utils
         list($usec, $sec) = explode(" ", microtime());
         $time = date('ymdHis', $sec);
         $usec = (float)$usec * 1000000;
-        $usec = substr(str_pad($usec, 6, '0'),0,3);
-        $ip = self::ip();
+        $usec = substr(str_pad($usec, 6, '0'), 0, 3);
+        $ip = Request::ip();
         $ipint = ip2long($ip);
         if (empty($ipint)) {
-            $ipint = mt_rand(0,1000000000);
+            $ipint = mt_rand(0, 1000000000);
         }
-        $sn = $prefix . $time . $ipint. $usec;
+        $sn = $prefix . $time . $ipint . $usec . mt_rand(0, 99);
         return $sn;
     }
-    /**
-     * 获取session值以及客户端cookie的PHPSESSID
-     * @param $key 获取session索引值
-     * @param $value 设置session索引值
-     * @param $getSet 当从未设置过索引值时,设置值。
-     * @return string 默认返回session_id值
-     */
-    public static function cookieSession($key = '', $value = false, $getSet = false, \Closure $fn = function(){})
-    {
-        $sessName = session_name();
-        $cookieSessId = isset($_COOKIE[$sessName]) ? $_COOKIE[$sessName] : '';
-        $isSession = false;
-        if (PHP_SESSION_ACTIVE != session_status()) {
-            session_start();
-            $isSession = true;
-        }
-        $sessionId = session_id();
-        if (!empty($cookieSessId) && $cookieSessId != $sessionId) {
-            $fn([
-                'cookie' => $_COOKIE,
-                'session' => $_SESSION,
-                'session_id' => $sessionId
-            ]);
-        }
-        $rs = ['id' => $sessionId];
-        if (!empty($key)) {
-            $sessValue = isset($_SESSION[$key]) ? $_SESSION[$key] : false;
-            if ($value !== false) {
-                $_SESSION[$key] = $value;
-                $rs[$key] = $value;
-            } else if ($getSet !== false) {
-                if ($sessValue === false) {
-                    $_SESSION[$key] = $getSet;
-                    $rs[$key] = $getSet;
-                } else {
-                    $rs[$key] = $sessValue;
-                }
-            } else {
-                $rs[$key] = $sessValue;
-            }
-        }
-        if ($isSession) {
-            session_write_close();
-        }
-        if (empty($key)) {
-            return $sessionId;
-        } else {
-            return $rs[$key];
-        }
-    }
-    /**
-     * 获取客户端IP地址
-     * @param integer $type 返回类型 0 返回IP地址 1 返回IPV4地址数字
-     * @param boolean $adv  是否进行高级模式获取（有可能被伪装）
-     * @return mixed
-     */
-    public static function ip($type = 0, $adv = true)
-    {
-        $type      = $type ? 1 : 0;
-        static $ip = null;
-        if (null !== $ip) {
-            return $ip[$type];
-        }
-        if ($adv) {
-            if (isset($_SERVER['HTTP_X_FORWARDED_FOR'])) {
-                $arr = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);
-                $pos = array_search('unknown', $arr);
-                if (false !== $pos) {
-                    unset($arr[$pos]);
-                }
-                $ip = trim(current($arr));
-            } elseif (isset($_SERVER['HTTP_CLIENT_IP'])) {
-                $ip = $_SERVER['HTTP_CLIENT_IP'];
-            } elseif (isset($_SERVER['REMOTE_ADDR'])) {
-                $ip = $_SERVER['REMOTE_ADDR'];
-            }
-        } elseif (isset($_SERVER['REMOTE_ADDR'])) {
-            $ip = $_SERVER['REMOTE_ADDR'];
-        }
-        // IP地址合法验证
-        $long = sprintf("%u", ip2long($ip));
-        $ip   = $long ? [$ip, $long] : ['0.0.0.0', 0];
-        return $ip[$type];
-    }
+
     /**
      * json格式字符串转数据
      *
@@ -276,175 +156,6 @@ class Utils
         }
         return $arr;
     }
-    public static function isSsl()
-    {
-        $server = $_SERVER;
-        if (isset($server['HTTPS']) && ('1' == $server['HTTPS'] || 'on' == strtolower($server['HTTPS']))) {
-            return true;
-        } elseif (isset($server['REQUEST_SCHEME']) && 'https' == $server['REQUEST_SCHEME']) {
-            return true;
-        } elseif (isset($server['SERVER_PORT']) && ('443' == $server['SERVER_PORT'])) {
-            return true;
-        } elseif (isset($server['HTTP_X_FORWARDED_PROTO']) && 'https' == $server['HTTP_X_FORWARDED_PROTO']) {
-            return true;
-        }
-        return false;
-    }
-    public static function scheme()
-    {
-        return self::isSsl() ? 'https' : 'http';
-    }
-    /**
-     *@param bool $strict true 仅仅获取HOST
-     */
-    public static function host($strict = false)
-    {
-        $host = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : '';
-        return true === $strict && strpos($host, ':') ? strstr($host, ':', true) : $host;
-    }
-
-    public static function domain()
-    {
-        return self::scheme() . "://" . self::host();
-    }
-    public static function domainUrl($url)
-    {
-        $domain = self::domain();
-        $pos = strpos($url, 'http');
-        if (false === $pos || $pos > 0) {
-            return $domain . '/' . ltrim($url, '/');
-        }
-        return $url;
-    }
-    public static function buildUri($url, $data = [])
-    {
-        if (empty($data)) {
-            return $url;
-        }
-        $arr  = parse_url($url);
-        if (empty($arr)) {
-            return $url;
-        }
-        $query    = isset($arr['query']) ? $arr['query'] : '';
-        $queryArr = !empty($query) ? self::parseQuery($query) : [];
-        $queryArr = array_merge($queryArr, $data);
-        $query = self::buildQuery($queryArr);
-        $scheme = isset($arr['scheme']) ? $arr['scheme'] . '://' : '';
-        $host   = isset($arr['host']) ? $arr['host'] : '';
-        $path   = isset($arr['path']) ? $arr['path'] : '';
-        return $scheme . $host . $path . '?' . $query;
-    }
-
-    /**
-     * Build a query string from an array of key value pairs.
-     * This function can use the return value of parse_query() to build a query
-     * string. This function does not modify the provided keys when an array is
-     * encountered (like http_build_query would).
-     *
-     * @param array     $params   Query string parameters.
-     * @param int|false $encoding Set to false to not encode, PHP_QUERY_RFC3986
-     *                            to encode using RFC3986, or PHP_QUERY_RFC1738
-     *                            to encode using RFC1738.
-     * @return string
-     */
-    public static function buildQuery(array $params, $encoding = PHP_QUERY_RFC3986)
-    {
-        if (!$params) {
-            return '';
-        }
-        if ($encoding === false) {
-            $encoder = function ($str) {
-                return $str;
-            };
-        } elseif ($encoding === PHP_QUERY_RFC3986) {
-            $encoder = 'rawurlencode';
-        } elseif ($encoding === PHP_QUERY_RFC1738) {
-            $encoder = 'urlencode';
-        } else {
-            throw new \Exception('Invalid type');
-        }
-        $qs = '';
-        foreach ($params as $k => $v) {
-            $k = $encoder($k);
-            if (!is_array($v)) {
-                $qs .= $k;
-                if ($v !== null) {
-                    $qs .= '=' . $encoder($v);
-                }
-                $qs .= '&';
-            } else {
-                foreach ($v as $vv) {
-                    $qs .= $k;
-                    if ($vv !== null) {
-                        $qs .= '=' . $encoder($vv);
-                    }
-                    $qs .= '&';
-                }
-            }
-        }
-        return $qs ? (string) substr($qs, 0, -1) : '';
-    }
-    /**
-     * Parse a query string into an associative array.
-     * If multiple values are found for the same key, the value of that key
-     * value pair will become an array. This function does not parse nested
-     * PHP style arrays into an associative array (e.g., foo[a]=1&foo[b]=2 will
-     * be parsed into ['foo[a]' => '1', 'foo[b]' => '2']).
-     * @param string   $str         Query string to parse
-     * @param int|bool $urlEncoding How the query string is encoded
-     *
-     * @return array
-     */
-    public static function parseQuery($str, $urlEncoding = true)
-    {
-        $result = [];
-        if ($str === '') {
-            return $result;
-        }
-        if ($urlEncoding === true) {
-            $decoder = function ($value) {
-                return rawurldecode(str_replace('+', ' ', $value));
-            };
-        } elseif ($urlEncoding === PHP_QUERY_RFC3986) {
-            $decoder = 'rawurldecode';
-        } elseif ($urlEncoding === PHP_QUERY_RFC1738) {
-            $decoder = 'urldecode';
-        } else {
-            $decoder = function ($str) {
-                return $str;
-            };
-        }
-        foreach (explode('&', $str) as $kvp) {
-            $parts = explode('=', $kvp, 2);
-            $key = $decoder($parts[0]);
-            $value = isset($parts[1]) ? $decoder($parts[1]) : null;
-            if (!isset($result[$key])) {
-                $result[$key] = $value;
-            } else {
-                if (!is_array($result[$key])) {
-                    $result[$key] = [$result[$key]];
-                }
-                $result[$key][] = $value;
-            }
-        }
-        return $result;
-    }
-    /**
-     * 解析浏览器语言，得到localcode
-     * @return bool|mixed|string
-     */
-    public static function getLocalCode()
-    {
-        $ret = '';
-        if (isset($_SERVER['HTTP_ACCEPT_LANGUAGE']) && $_SERVER['HTTP_ACCEPT_LANGUAGE']) {
-            $tmp = $_SERVER['HTTP_ACCEPT_LANGUAGE'];
-            if (stripos($tmp, '-') == 2) {
-                $ret = substr($tmp, 0, 5);
-                $ret = str_replace('-', '_', $ret);
-            }
-        }
-        return $ret;
-    }
     /**
      * 转驼峰命名
      * @param string $uncamelized_words
@@ -455,5 +166,110 @@ class Utils
     {
         $uncamelized_words = $separator . str_replace($separator, " ", strtolower($uncamelized_words));
         return ltrim(str_replace(" ", "", ucwords($uncamelized_words)), $separator);
+    }
+    /**
+     * 数字精度算法
+     *
+     * @param array $deciman
+     * @param string $type  default: +  [+ - * /]
+     * @param integer $hedge [0-9]
+     * @param integer $multiple
+     * @return float
+     */
+    public static function calfloat($decimal, $hedge = 2, $type = "+", $multiple = 100)
+    {
+        if (empty($decimal) || !is_array($decimal)) {
+            return $decimal;
+        }
+        $first = array_shift($decimal);
+        if (empty($decimal) || is_null($decimal)) {
+            return $first;
+        }
+        $multiple = (int)$multiple;
+        $rs = intval((string)((float)$first * (int)$multiple));
+        $multitotal = $multiple;
+        foreach ($decimal as $v) {
+            $mv = intval((string)((float)$v * $multiple));
+            if ($type == '+') {
+                $rs += $mv;
+            } elseif ($type == '-') {
+                $rs -= $mv;
+            } elseif ($type == '*') {
+                $multitotal *= $multiple;
+                $rs *= $mv;
+            } elseif ($type == '/') {
+                $multitotal = 1;
+                if ($mv == 0) {
+                    $rs = 0;
+                } else {
+                    $rs /= $mv;
+                }
+            }
+        }
+        $hedge = (int)abs($hedge);
+        if ($hedge == 0) {
+            return intval($rs / $multitotal);
+        }
+        return sprintf('%.' . $hedge . 'f', ($rs / $multitotal));
+    }
+    public static function caladd()
+    {
+        $decimal = func_get_args();
+        if (empty($decimal)) {
+            return 0;
+        }
+        return self::calfloat($decimal, 2, '+');
+    }
+    public static function calsub()
+    {
+        $decimal = func_get_args();
+        if (empty($decimal)) {
+            return 0;
+        }
+        return self::calfloat($decimal, 2, '-');
+    }
+    public static function calmul()
+    {
+        $decimal = func_get_args();
+        if (empty($decimal)) {
+            return 0;
+        }
+        return self::calfloat($decimal, 2, '*');
+    }
+    public static function caldiv()
+    {
+        $decimal = func_get_args();
+        if (empty($decimal)) {
+            return 0;
+        }
+        return self::calfloat($decimal, 2, '/');
+    }
+
+    /**
+     * 多级数组合并
+     */
+    public static function arrayMerge(array $arr, array $arr1)
+    {
+        $newArr = [];
+        foreach ($arr as $k => $v) {
+            $val = isset($arr1[$k]) ? $arr1[$k] : null;
+            if (is_null($val)) {
+                $newArr[$k] = $v;
+            } else {
+                if (is_array($val)) {
+                    $newArr[$k] = self::arrayMerge((is_array($v) ? $v : []), $val);
+                } else {
+                    $newArr[$k] = $val;
+                }
+            }
+        }
+        foreach ($arr1 as $k1 => $v1) {
+            $val1 = isset($arr[$k1]) ? $arr[$k1] : null;
+            if (!is_null($val1)) {
+                continue;
+            }
+            $newArr[$k1] = $v1;
+        }
+        return $newArr;
     }
 }

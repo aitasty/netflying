@@ -3,7 +3,7 @@
  * @Author: He.Bin 
  * @Date: 2022-05-24 11:05:25 
  * @Last Modified by: He.Bin
- * @Last Modified time: 2022-05-25 16:09:38
+ * @Last Modified time: 2022-06-06 14:38:51
  */
 
 namespace Netflying\Payment\data;
@@ -36,6 +36,8 @@ class OrderProduct extends Model
         'total_tax_price' => 'int',
         //优惠金额，或优惠券金额
         'total_discount_price' => 'int',
+        //商品特性
+        'type' => 'string',
         //商品图片
         'image_url' => 'string',
         //商品链接
@@ -52,6 +54,7 @@ class OrderProduct extends Model
         'quantity_unit' => '',
         'total_tax_price' => 0,
         'total_discount_price' => 0,
+        'type' => '',
         'image_url' => '',
         'product_url' => ''
     ];
